@@ -1,0 +1,124 @@
+# This program is a license plate detection and license plate character
+# recognition algorithm. Three color images are selected with Russian
+# car license plates and non Russian. 
+
+import numpy as np
+
+import cv2
+import pytesseract
+import imutils
+
+pytesseract.pytesseract.tesseract_cmd = r'/usr/local/bin/tesseract'
+
+image1 = cv2.imread('image1.png')
+image1rgb = cv2.cvtColor(image1, cv2.COLOR_BGR2RGB)
+cv2.imshow('image1', image1rgb)
+
+carplate_haar_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_russian_plate_number.xml')
+
+def carplate_detect(image):
+    carplate_overlay = image.copy() 
+    carplate_rects = carplate_haar_cascade.detectMultiScale(carplate_overlay,scaleFactor=1.1, minNeighbors=3)
+    for x,y,w,h in carplate_rects: 
+        cv2.rectangle(carplate_overlay, (x,y), (x+w,y+h), (0,0,255), 5) 
+
+        return carplate_overlay
+
+detected_carplate_img = carplate_detect(image1rgb)
+cv2.imshow('image1 detect', detected_carplate_img)
+
+def carplate_extract(image):
+    
+    carplate_rects = carplate_haar_cascade.detectMultiScale(image,scaleFactor=1.1, minNeighbors=5)
+    for x,y,w,h in carplate_rects: 
+        carplate_img = image[y+15:y+h-10 ,x+15:x+w-20] 
+        
+        return carplate_img
+
+def enlarge_img(image, scale_percent):
+    width = int(image.shape[1] * scale_percent / 100)
+    height = int(image.shape[0] * scale_percent / 100)
+    dim = (width, height)
+    resized_image = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
+    return resized_image
+
+# Plate Enlargement
+
+carplate_extract_img = carplate_extract(image1rgb)
+carplate_extract_img = enlarge_img(carplate_extract_img, 150)
+carplate_extract_img_gray = cv2.cvtColor(carplate_extract_img, cv2.COLOR_RGB2GRAY) 
+cv2.imshow('image1 characters', carplate_extract_img_gray)
+
+# Noise Reduction and Smoothing
+
+carplate_extract_img_gray_blur = cv2.medianBlur(carplate_extract_img_gray,3)
+cv2.imshow('image1 characters smooth', carplate_extract_img_gray_blur)
+
+print(pytesseract.image_to_string(carplate_extract_img_gray_blur, 
+                                  config = f'--psm 8 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'))
+
+image2 = cv2.imread('image2.png')
+image2rgb = cv2.cvtColor(image2, cv2.COLOR_BGR2RGB)
+cv2.imshow('image2', image2rgb)
+
+carplate_haar_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_russian_plate_number.xml')
+
+def carplate_detect(image):
+    carplate_overlay = image.copy() 
+    carplate_rects = carplate_haar_cascade.detectMultiScale(carplate_overlay,scaleFactor=1.1, minNeighbors=3)
+    for x,y,w,h in carplate_rects: 
+        cv2.rectangle(carplate_overlay, (x,y), (x+w,y+h), (0,0,255), 5) 
+
+        return carplate_overlay
+
+detected_carplate_img = carplate_detect(image2rgb)
+cv2.imshow('image2 detect', detected_carplate_img)
+
+def carplate_extract(image):
+    
+    carplate_rects = carplate_haar_cascade.detectMultiScale(image,scaleFactor=1.1, minNeighbors=5)
+    for x,y,w,h in carplate_rects: 
+        carplate_img = image[y+15:y+h-10 ,x+15:x+w-20] 
+        
+        return carplate_img
+
+# Plate Enlargement
+
+carplate_extract_img = carplate_extract(image2rgb)
+
+image3 = cv2.imread('image3.png')
+image3rgb = cv2.cvtColor(image3, cv2.COLOR_BGR2RGB)
+cv2.imshow('image3', image3rgb)
+
+image3 = cv2.resize(image3, (620,480) )
+image3g = cv2.cvtColor(image3, cv2.COLOR_BGR2GRAY)
+
+image3g = cv2.bilateralFilter(image3g, 13, 15, 15)
+edged = cv2.Canny(image3g, 30, 200)
+
+contours=cv2.findContours(edged.copy(),cv2.RETR_TREE,
+                                            cv2.CHAIN_APPROX_SIMPLE)
+contours = imutils.grab_contours(contours)
+contours = sorted(contours,key=cv2.contourArea, reverse = True)[:10]
+screenCnt = None
+
+for c in contours:
+    peri = cv2.arcLength(c, True)
+    approx = cv2.approxPolyDP(c, 0.018 * peri, True)
+    if len(approx) == 4:
+        screenCnt = approx
+        break
+
+mask = np.zeros(image3g.shape,np.uint8)
+new_image = cv2.drawContours(mask,[screenCnt],0,255,-1,)
+new_image = cv2.bitwise_and(image3,image3,mask=mask)
+
+(x, y) = np.where(mask == 255)
+(topx, topy) = (np.min(x), np.min(y))
+(bottomx, bottomy) = (np.max(x), np.max(y))
+Cropped = image3g[topx:bottomx+1, topy:bottomy+1]
+cv2.imshow('image3 characters', Cropped)
+
+print(pytesseract.image_to_string(Cropped, 
+                                  config = f'--psm 8 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'))
+
